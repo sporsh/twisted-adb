@@ -1,16 +1,16 @@
 import unittest
-import client
+from adb import protocol
 
 class AdbProtocolTest(unittest.TestCase):
     def setUp(self):
-        self.protocol = client.AdbProtocolBase()
+        self.protocol = protocol.AdbProtocolBase()
 
     def test_get_message(self):
         messages = []
         self.protocol.adb_OKAY = messages.append
 
         data = "hello adb\x00"
-        message = client.AdbMessage(client.A_OKAY, 0, 1, data)
+        message = protocol.AdbMessage(protocol.A_OKAY, 0, 1, data)
         # Encode the message and send it in two pieces
         encoded_message = message.encode()
         self.protocol.dataReceived(encoded_message[:10])
@@ -25,14 +25,14 @@ class AdbProtocolTest(unittest.TestCase):
                 '\x32\x02\x00\x00\xbc\xb1\xa7\xb1'
                 '\x68\x6f\x73\x74\x3a\x3a\x00')
 
-        message = client.AdbMessage(client.A_CNXN,
-                                    client.A_VERSION,
-                                    client.MAX_PAYLOAD,
-                                    'host::\x00')
+        message = protocol.AdbMessage(protocol.A_CNXN,
+                                      protocol.A_VERSION,
+                                      protocol.MAX_PAYLOAD,
+                                      'host::\x00')
 
         self.assertEquals(message.encode(), data,
                           "Message did encode to the expected data")
 
-        decoded_message, _ = client.AdbMessage.decode(data)
+        decoded_message, _ = protocol.AdbMessage.decode(data)
         self.assertEquals(decoded_message, message,
                           "Data did not decode to the expected message")

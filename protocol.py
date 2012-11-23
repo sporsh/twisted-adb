@@ -68,7 +68,9 @@ class AdbMessageHeader(tuple):
         return cls(*args), data[length:]
 
     def __str__(self, *args, **kwargs):
-        return getCommandString(self.command)
+        return str((getCommandString(self.command),
+                   self.arg0, self.arg1, self.data_length,
+                   self.data_check, self.magic))
 
 class AdbMessage(object):
     def __init__(self, command, arg0, arg1, data=''):
