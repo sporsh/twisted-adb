@@ -5,8 +5,9 @@ from twisted.internet.endpoints import clientFromString
 from twisted.internet.protocol import ClientFactory
 from adb import protocol
 
-if __name__ == '__main__':
-    endpoint = clientFromString(reactor, "tcp:localhost:5555")
+def main():
+    endpoint = clientFromString(reactor, "tcp:localhost:5555:timeout=5")
+#    endpoint = clientFromString(reactor, "unix:/dev/bus/usb/001/012")
 
     factory = ClientFactory()
     factory.protocol = protocol.AdbProtocolBase
@@ -38,5 +39,13 @@ if __name__ == '__main__':
                            protocol.MAX_PAYLOAD,
                            'host::\x00')
 
+    @client_d.addErrback
+    def connection_failed(reason):
+        print reason.getErrorMessage()
+        reactor.stop()
+
     reactor.run()
-    print "DONE", ''.join(data)
+    print "DONE", ''.join(data).splitlines()
+
+if __name__ == '__main__':
+    main()
