@@ -10,7 +10,6 @@ import logging
 
 log = logging.getLogger()
 
-MAX_PAYLOAD = 4096
 
 A_SYNC = 0x434e5953
 A_CNXN = 0x4e584e43
@@ -20,12 +19,99 @@ A_CLSE = 0x45534c43
 A_WRTE = 0x45545257
 
 A_VERSION = 0x01000000  # ADB protocol version
+MAX_PAYLOAD = 4096
 
 
-def getCommandString(message):
+def getCommandString(commandCode):
     """Returns a readable string representation of a message code
     """
-    return struct.pack('L', message)
+    return struct.pack('L', commandCode)
+
+
+class AdbProtocolBase(protocol.Protocol):
+    deferred = None
+    buff = ''
+    def __init__(self):
+        self.messageHandler = self
+
+    def dataReceived(self, data):
+        self.buff += data
+        message = self.getMessage()
+        while message:
+            self.dispatchMessage(message)
+            message = self.getMessage()
+
+    def getMessage(self):
+        try:
+            message, self.buff = AdbMessage.decode(self.buff)
+        except:
+            #TODO: correctly handle corrupt messages
+            return
+        return message
+
+    def dispatchMessage(self, message):
+        name = 'handle_' + getCommandString(message.command)
+        handler = getattr(self.messageHandler, name, self.unhandledMessage)
+        handler(message.arg0, message.arg1, message.data)
+
+    def unhandledMessage(self, message):
+        log.debug("Unhandled message: %s", message)
+
+    def sendConnect(self):
+        data = 'host::'
+        self.sendCommand(A_CNXN, A_VERSION, MAX_PAYLOAD, data)
+
+    def sendCommand(self, command, arg0, arg1, data):
+        message = AdbMessage(command, arg0, arg1, data + '\x00')
+        self.sendMessage(message)
+
+    def sendMessage(self, message):
+        """Send a complete ADB message to the peer
+        """
+        #TODO: split message into chunks of MAX_PAYLOAD
+        self.transport.write(message.encode())
+
+
+
+class AdbMessage(object):
+    def __init__(self, command, arg0, arg1, data=''):
+        self.command = command
+        self.arg0 = arg0
+        self.arg1 = arg1
+        self.data = data
+
+    @property
+    def header(self):
+        data_check = sum(ord(c) for c in self.data)
+        magic = self.command ^ 0xffffffff
+        return AdbMessageHeader(self.command,
+                                self.arg0,
+                                self.arg1,
+                                len(self.data),
+                                data_check,
+                                magic)
+
+    @classmethod
+    def decode(cls, data):
+        header, data = AdbMessageHeader.decode(data)
+        if len(data) < header.data_length:
+            return
+        message = cls(header.command, header.arg0, header.arg1, data)
+        message.validate(header)
+        return message, data[header.data_length:]
+
+    def encode(self):
+        return self.header.encode() + self.data
+
+    def validate(self, header):
+        assert self.header == header
+
+    def __eq__(self, other):
+        return self.header == other.header and self.data == other.data
+
+    def __repr__(self):
+        return "%s(%r)" % (self.header, self.data)
+
 
 class AdbMessageHeader(tuple):
     _fmt = '6L'
@@ -74,89 +160,3 @@ class AdbMessageHeader(tuple):
         return str((getCommandString(self.command),
                    self.arg0, self.arg1, self.data_length,
                    self.data_check, self.magic))
-
-class AdbMessage(object):
-    def __init__(self, command, arg0, arg1, data=''):
-        self.command = command
-        self.arg0 = arg0
-        self.arg1 = arg1
-        self.data = data
-
-    @property
-    def header(self):
-        data_check = sum(ord(c) for c in self.data)
-        magic = self.command ^ 0xffffffff
-        return AdbMessageHeader(self.command,
-                                self.arg0,
-                                self.arg1,
-                                len(self.data),
-                                data_check,
-                                magic)
-
-    @classmethod
-    def decode(cls, data):
-        header, data = AdbMessageHeader.decode(data)
-        if len(data) < header.data_length:
-            return
-        message = cls(header.command, header.arg0, header.arg1, data)
-        message.validate(header)
-        return message, data[header.data_length:]
-
-    def encode(self):
-        return self.header.encode() + self.data
-
-    def validate(self, header):
-        assert self.header == header
-
-    def __eq__(self, other):
-        return self.header == other.header and self.data == other.data
-
-    def __repr__(self):
-        return "%s(%r)" % (self.header, self.data)
-
-
-class AdbProtocolBase(protocol.Protocol):
-    deferred = None
-    buff = ''
-    def __init__(self):
-        self.messageHandler = self
-
-    def dataReceived(self, data):
-        self.buff += data
-        message = self.getMessage()
-        while message:
-            self.dispatchMessage(message)
-            message = self.getMessage()
-
-    def getMessage(self):
-        try:
-            message, self.buff = AdbMessage.decode(self.buff)
-        except:
-            #TODO: correctly handle corrupt messages
-            return
-        return message
-
-    def dispatchMessage(self, message):
-        name = 'handle_' + getCommandString(message.command)
-        handler = getattr(self.messageHandler, name, self.unhandledMessage)
-        handler(message.arg0, message.arg1, message.data)
-
-    def unhandledMessage(self, message):
-        log.debug("Unhandled message: %s", message)
-
-    def sendConnect(self):
-        data = 'host::'
-        self.sendCommand(A_CNXN, A_VERSION, MAX_PAYLOAD, data)
-
-    def sendCommand(self, command, arg0, arg1, data):
-        message = AdbMessage(command, arg0, arg1, data + '\x00')
-        self.sendMessage(message)
-
-    def sendMessage(self, message):
-        """Send a complete ADB message to the peer
-        """
-        #TODO: split message into chunks of MAX_PAYLOAD
-        self.transport.write(message.encode())
-
-
-connectMessage = AdbMessage(A_CNXN, A_VERSION, MAX_PAYLOAD, 'host::\x00')
