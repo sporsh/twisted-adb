@@ -10,17 +10,16 @@ import logging
 
 log = logging.getLogger()
 
-
-A_SYNC = 0x434e5953
-A_CNXN = 0x4e584e43
-A_OPEN = 0x4e45504f
-A_OKAY = 0x59414b4f
-A_CLSE = 0x45534c43
-A_WRTE = 0x45545257
-
-A_VERSION = 0x01000000  # ADB protocol version
+VERSION = 0x01000000  # ADB protocol version
 MAX_PAYLOAD = 4096
 
+# Message command constants
+CMD_SYNC = 0x434e5953
+CMD_CNXN = 0x4e584e43
+CMD_OPEN = 0x4e45504f
+CMD_OKAY = 0x59414b4f
+CMD_CLSE = 0x45534c43
+CMD_WRTE = 0x45545257
 
 def getCommandString(commandCode):
     """Returns a readable string representation of a message code
@@ -29,6 +28,9 @@ def getCommandString(commandCode):
 
 
 class AdbProtocolBase(protocol.Protocol):
+    version = VERSION
+    maxPayload = MAX_PAYLOAD
+
     deferred = None
     buff = ''
     def __init__(self):
@@ -57,10 +59,6 @@ class AdbProtocolBase(protocol.Protocol):
     def unhandledMessage(self, message):
         log.debug("Unhandled message: %s", message)
 
-    def sendConnect(self):
-        data = 'host::'
-        self.sendCommand(A_CNXN, A_VERSION, MAX_PAYLOAD, data)
-
     def sendCommand(self, command, arg0, arg1, data):
         message = AdbMessage(command, arg0, arg1, data + '\x00')
         self.sendMessage(message)
@@ -71,6 +69,33 @@ class AdbProtocolBase(protocol.Protocol):
         #TODO: split message into chunks of MAX_PAYLOAD
         self.transport.write(message.encode())
 
+    def send_CNXN(self, systemType, serialNumber='', banner=''):
+        """Connect to the remote, giving our system information
+
+        @param systemType: "bootloader", "device" or "host"
+        @param serialNumber: Some kind of unique ID (or empty)
+        @param banner: Human-readable version or identifier string.
+                       The banner is used to transmit useful properties.
+        """
+        systemIdentityString = ':'.join((systemType, serialNumber, banner))
+        self.sendCommand(CMD_CNXN,
+                         self.version,
+                         self.maxPayload,
+                         systemIdentityString)
+
+    def handle_CNXN(self, version, maxPayload, systemIdentityString):
+        """Called when we get an incoming CNXN message
+        """
+        systemType, serialNumber, banner = systemIdentityString.split(':')
+        self.sessionConnected(version,
+                              maxPayload,
+                              systemType,
+                              serialNumber,
+                              banner)
+
+    def sessionConnected(self, version, maxPayload,
+                         systemType, serialNumber, banner):
+        raise NotImplementedError()
 
 
 class AdbMessage(object):
