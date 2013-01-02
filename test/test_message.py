@@ -1,16 +1,16 @@
 import unittest
 from adb import protocol
 
-class AdbProtocolTest(unittest.TestCase):
+class AdbProtocolMessageTest(unittest.TestCase):
     def setUp(self):
         self.protocol = protocol.AdbProtocolBase()
 
     def test_get_message(self):
         messages = []
-        self.protocol.adb_OKAY = messages.append
+        self.protocol.dispatchMessage = messages.append
 
         data = "hello adb\x00"
-        message = protocol.AdbMessage(protocol.A_OKAY, 0, 1, data)
+        message = protocol.AdbMessage(protocol.CMD_OKAY, 0, 1, data)
         # Encode the message and send it in two pieces
         encoded_message = message.encode()
         self.protocol.dataReceived(encoded_message[:10])
@@ -25,8 +25,8 @@ class AdbProtocolTest(unittest.TestCase):
                 '\x32\x02\x00\x00\xbc\xb1\xa7\xb1'
                 '\x68\x6f\x73\x74\x3a\x3a\x00')
 
-        message = protocol.AdbMessage(protocol.A_CNXN,
-                                      protocol.A_VERSION,
+        message = protocol.AdbMessage(protocol.CMD_CNXN,
+                                      protocol.VERSION,
                                       protocol.MAX_PAYLOAD,
                                       'host::\x00')
 
