@@ -31,9 +31,9 @@ class AdbProtocolBase(protocol.Protocol):
     version = VERSION
     maxPayload = MAX_PAYLOAD
 
-    deferred = None
-    buff = ''
     def __init__(self):
+        self.buff = ''
+        self.streams = {}
         self.messageHandler = self
 
     def dataReceived(self, data):
@@ -60,13 +60,8 @@ class AdbProtocolBase(protocol.Protocol):
         log.debug("Unhandled message: %s", message)
 
     def sendCommand(self, command, arg0, arg1, data):
+        #TODO: split data into chunks of MAX_PAYLOAD
         message = AdbMessage(command, arg0, arg1, data + '\x00')
-        self.sendMessage(message)
-
-    def sendMessage(self, message):
-        """Send a complete ADB message to the peer
-        """
-        #TODO: split message into chunks of MAX_PAYLOAD
         self.transport.write(message.encode())
 
     def send_CNXN(self, systemType, serialNumber='', banner=''):
@@ -86,16 +81,40 @@ class AdbProtocolBase(protocol.Protocol):
     def handle_CNXN(self, version, maxPayload, systemIdentityString):
         """Called when we get an incoming CNXN message
         """
-        systemType, serialNumber, banner = systemIdentityString.split(':')
-        self.sessionConnected(version,
-                              maxPayload,
-                              systemType,
-                              serialNumber,
-                              banner)
+        if version != self.version or maxPayload < maxPayload:
+            self.transport.loseConnection()
+        else:
+            self.connectSession(systemIdentityString)
 
-    def sessionConnected(self, version, maxPayload,
-                         systemType, serialNumber, banner):
+    def connectSession(self, systemIdentityString):
         raise NotImplementedError()
+
+    def handle_OPEN(self, remoteId, sessionId, destination):
+        localId = len(self.streams)
+        self.streams[localId] = self.openStream(destination)
+
+    def handle_OKAY(self, remoteId, localId, data):
+        """Called when the remote side has opened a stream
+        """
+        stream = self.streams[localId]
+        stream.open(remoteId)
+
+    def openStream(self, destination):
+        raise NotImplementedError()
+
+    def handle_CLSE(self, remoteId, localId, data):
+        self.closeStream(localId)
+
+    def closeStream(self, localId):
+        remoteId = self.streams.get(localId, None)
+        if not remoteId is None:
+            self.sendCommand(CMD_CLSE, localId, remoteId, "")
+            self.streams[localId] = None
+
+    def streamWrite(self, remoteId, data):
+        """Write data to a stream
+        """
+        self.sendCommand(CMD_WRTE, 0, remoteId, data)
 
 
 class AdbMessage(object):
