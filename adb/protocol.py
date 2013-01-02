@@ -6,6 +6,9 @@
 
 from twisted.internet import protocol
 import struct
+import logging
+
+log = logging.getLogger()
 
 MAX_PAYLOAD = 4096
 
@@ -115,6 +118,8 @@ class AdbMessage(object):
 class AdbProtocolBase(protocol.Protocol):
     deferred = None
     buff = ''
+    def __init__(self):
+        self.messageHandler = self
 
     def dataReceived(self, data):
         self.buff += data
@@ -132,12 +137,12 @@ class AdbProtocolBase(protocol.Protocol):
         return message
 
     def dispatchMessage(self, message):
-        name = 'adb_' + getCommandString(message.command)
-        handler = getattr(self, name, self.unhandeledMessage)
-        handler(message)
+        name = 'handle_' + getCommandString(message.command)
+        handler = getattr(self.messageHandler, name, self.unhandledMessage)
+        handler(message.arg0, message.arg1, message.data)
 
-    def unhandeledMessage(self, message):
-        print "Unhandeled message:", message
+    def unhandledMessage(self, message):
+        log.debug("Unhandled message: %s", message)
 
     def sendConnect(self):
         data = 'host::'
