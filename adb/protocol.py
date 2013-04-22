@@ -64,7 +64,7 @@ class AdbProtocolBase(protocol.Protocol):
         message = AdbMessage(command, arg0, arg1, data)
         self.transport.write(message.encode())
 
-    def send_CNXN(self, systemType, serialNumber='', banner=''):
+    def connectSession(self, systemType, serialNumber='', banner=''):
         """Connect to the remote, giving our system information
 
         @param systemType: "bootloader", "device" or "host"
@@ -84,37 +84,94 @@ class AdbProtocolBase(protocol.Protocol):
         if version != self.version or maxPayload < maxPayload:
             self.transport.loseConnection()
         else:
-            self.connectSession(systemIdentityString)
+            self.sessionConnected(systemIdentityString)
 
-    def connectSession(self, systemIdentityString):
+    def sessionConnected(self, systemIdentityString):
+        """On servers, this is called after we receive a valid CNXN message
+        from a client.
+        On clients, this is called when the server has replied to our CNXN
+        """
         raise NotImplementedError()
+
+    def openStream(self, stream):
+        localId = len(self.streams) + 1
+        self.streams[localId] = stream
+        stream.localId = localId
+        self.sendCommand(CMD_OPEN,
+                         stream.localId,
+                         0,
+                         stream.destination + '\x00')
 
     def handle_OPEN(self, remoteId, sessionId, destination):
-        localId = len(self.streams)
-        self.streams[localId] = self.openStream(destination)
+        """Called when we receive a message indicating that the other side
+        has a stream identified by :remoteId: that it wishes to connect to
+        the named :destination: on our side.
+
+        We reply to this message with either a OKAY, indicating the connection
+        has been established, or a CLSE message indicating failure.
+
+        An OPEN message implies an OKAY message from the connecting remote stream.
+        """
+        localId = len(self.streams) + 1
+        try:
+            assert remoteId != 0, "stream id can not be 0"
+            stream = self.openStream(destination)
+            self.streams[localId] = stream
+        except:
+            log.exception("could not open stream")
+            # Indicate that the open failed
+            self.sendCommand(CMD_CLSE, 0, remoteId, '')
+        else:
+            # Indicate that the connection has been established
+            self.sendCommand(CMD_OKAY, localId, remoteId, '')
+            # Handle implicit OKAY message for the stream
+            stream.open(remoteId)
 
     def handle_OKAY(self, remoteId, localId, data):
-        """Called when the remote side has opened a stream
+        """Called when the stream on the remote side is ready for write.
+        @param data: should be ""
         """
-        stream = self.streams[localId]
-        stream.open(remoteId)
+        if not (remoteId and localId):
+            raise AdbError("Neither the local-id nor the"
+                           "remote-id may be zero.")
+        self.streamOpened(remoteId, localId)
 
-    def openStream(self, destination):
-        raise NotImplementedError()
+    def streamOpened(self, remoteId, localId):
+        print "STREAM OPENED"
+        stream = self.streams[localId]
+        stream.ready(remoteId)
+
+    def closeStream(self, localId, remoteId):
+        self.sendCommand(CMD_CLSE,
+                         localId,
+                         remoteId,
+                         '')
 
     def handle_CLSE(self, remoteId, localId, data):
-        self.closeStream(localId)
+        self.streamClosed(localId)
 
-    def closeStream(self, localId):
-        remoteId = self.streams.get(localId, None)
-        if not remoteId is None:
-            self.sendCommand(CMD_CLSE, localId, remoteId, "")
+    def streamClosed(self, localId):
+        """Called when the remote side wants to close a stream
+        """
+        stream = self.streams.get(localId, None)
+        print "STREAM: %r" % stream
+        if stream:
             self.streams[localId] = None
+            stream.close("Stream closed cleanly.")
 
     def streamWrite(self, remoteId, data):
         """Write data to a stream
         """
         self.sendCommand(CMD_WRTE, 0, remoteId, data)
+
+    def handle_WRTE(self, remoteId, localId, data):
+        stream = self.streams.get(localId, None)
+        if stream:
+            stream.protocol.dataReceived(data)
+            self.sendCommand(CMD_OKAY,
+                             localId,
+                             remoteId,
+                             '')
 
 
 class AdbMessage(object):
