@@ -82,6 +82,7 @@ class AdbProtocolBase(protocol.Protocol):
         """Called when we get an incoming CNXN message
         """
         if version != self.version or maxPayload < maxPayload:
+            log.error("Disconnecting: Protocol version or max payload mismatch")
             self.transport.loseConnection()
         else:
             self.sessionConnected(systemIdentityString)

@@ -16,14 +16,14 @@ def main():
 
     def adb_CNXN(client, message):
         print "GOT MESSAGE", message
-        client.sendCommand(protocol.A_OPEN, 2, message.arg0, 'shell:ls\x00')
+        client.sendCommand(protocol.CMD_OPEN, 2, message.arg0, 'shell:ls\x00')
     def adb_WRTE(client, message):
         print "GOT MESSAGE", message
         data.append(message.data)
-        client.sendCommand(protocol.A_OKAY, 2, message.arg0, '')
+        client.sendCommand(protocol.CMD_OKAY, 2, message.arg0, '')
     def adb_CLSE(client, message):
         print "GOT MESSAGE", message
-        client.sendCommand(protocol.A_CLSE, 2, message.arg0, '')
+        client.sendCommand(protocol.CMD_CLSE, 2, message.arg0, '')
         reactor.stop()
     factory.protocol.adb_CNXN = adb_CNXN
     factory.protocol.adb_WRTE = adb_WRTE
@@ -34,8 +34,8 @@ def main():
     @client_d.addCallback
     def send_connect(client):
         print "TCP CONNECTED", client
-        client.sendCommand(protocol.A_CNXN,
-                           protocol.A_VERSION,
+        client.sendCommand(protocol.CMD_CNXN,
+                           protocol.VERSION,
                            protocol.MAX_PAYLOAD,
                            'host::\x00')
 

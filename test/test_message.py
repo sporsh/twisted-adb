@@ -31,7 +31,7 @@ class AdbProtocolMessageTest(unittest.TestCase):
                                       'host::\x00')
 
         self.assertEquals(message.encode(), data,
-                          "Message did encode to the expected data")
+                           "Message did not encode to the expected data")
 
         decoded_message, _ = protocol.AdbMessage.decode(data)
         self.assertEquals(decoded_message, message,
