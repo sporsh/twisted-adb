@@ -61,7 +61,7 @@ class AdbProtocolBase(protocol.Protocol):
 
     def sendCommand(self, command, arg0, arg1, data):
         #TODO: split data into chunks of MAX_PAYLOAD
-        message = AdbMessage(command, arg0, arg1, data + '\x00')
+        message = AdbMessage(command, arg0, arg1, data)
         self.transport.write(message.encode())
 
     def send_CNXN(self, systemType, serialNumber='', banner=''):
@@ -76,7 +76,7 @@ class AdbProtocolBase(protocol.Protocol):
         self.sendCommand(CMD_CNXN,
                          self.version,
                          self.maxPayload,
-                         systemIdentityString)
+                         systemIdentityString + '\x00')
 
     def handle_CNXN(self, version, maxPayload, systemIdentityString):
         """Called when we get an incoming CNXN message
