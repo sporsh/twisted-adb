@@ -24,7 +24,7 @@ CMD_WRTE = 0x45545257
 def getCommandString(commandCode):
     """Returns a readable string representation of a message code
     """
-    return struct.pack('L', commandCode)
+    return struct.pack('<L', commandCode)
 
 
 class AdbProtocolBase(protocol.Protocol):
@@ -158,7 +158,7 @@ class AdbMessage(object):
 
 
 class AdbMessageHeader(tuple):
-    _fmt = '6L'
+    _fmt = '<6L'
 
     def __new__(cls, command, arg0, arg1, data_length, data_check, magic):
         """
