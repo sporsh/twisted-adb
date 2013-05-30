@@ -9,7 +9,7 @@ class AdbProtocolMessageTest(unittest.TestCase):
         messages = []
         self.protocol.dispatchMessage = messages.append
 
-        data = "hello adb\x00"
+        data = "hello adb"
         message = protocol.AdbMessage(protocol.CMD_OKAY, 0, 1, data)
         # Encode the message and send it in two pieces
         encoded_message = message.encode()
@@ -31,7 +31,7 @@ class AdbProtocolMessageTest(unittest.TestCase):
                                       'host::\x00')
 
         self.assertEquals(message.encode(), data,
-                           "Message did not encode to the expected data")
+                          "Message did not encode to the expected data")
 
         decoded_message, _ = protocol.AdbMessage.decode(data)
         self.assertEquals(decoded_message, message,

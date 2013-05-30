@@ -3,10 +3,9 @@ from twisted.internet import interfaces
 
 
 class AdbStream(object):
-    implements(interfaces.ITransport,
-               interfaces.IProtocol)
+    implements(interfaces.ITransport)
 
-    def __init__(self, destination, protocol):
+    def __init__(self, destination, protocol=None):
         self.conn = None
         self.localId = None
         self.remoteId = None
@@ -37,5 +36,5 @@ class AdbStream(object):
     def ready(self, remoteId):
         pass
 
-    def close(self, reason):
+    def closed(self, reason):
         pass

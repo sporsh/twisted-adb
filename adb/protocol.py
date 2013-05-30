@@ -7,6 +7,8 @@
 from twisted.internet import protocol
 import struct
 import logging
+from twisted.python import failure
+from twisted.python.failure import Failure
 
 log = logging.getLogger()
 
@@ -25,6 +27,10 @@ def getCommandString(commandCode):
     """Returns a readable string representation of a message code
     """
     return struct.pack('<L', commandCode)
+
+
+class AdbError(Exception):
+    pass
 
 
 class AdbProtocolBase(protocol.Protocol):
@@ -141,24 +147,25 @@ class AdbProtocolBase(protocol.Protocol):
         print "STREAM OPENED"
         stream = self.streams[localId]
         stream.ready(remoteId)
+#         raise NotImplementedError()
 
-    def closeStream(self, localId, remoteId):
-        self.sendCommand(CMD_CLSE,
-                         localId,
-                         remoteId,
-                         '')
+    def closeStream(self, stream, reason="Stream closed locally"):
+        localId, remoteId = stream.localId, stream.remoteId
+        self.streams[localId] = None
+        self.sendCommand(CMD_CLSE, localId, remoteId, '')
+        stream.close(reason)
 
     def handle_CLSE(self, remoteId, localId, data):
+        stream = self.streams.get(localId, None)
+        print "STREAM: %r" % stream
+        if stream:
+            reason = "Closed cleanly" if remoteId else Failure("Remote failed to open")
+            stream.close(reason)
         self.streamClosed(localId)
 
     def streamClosed(self, localId):
         """Called when the remote side wants to close a stream
         """
-        stream = self.streams.get(localId, None)
-        print "STREAM: %r" % stream
-        if stream:
-            self.streams[localId] = None
-            stream.close("Stream closed cleanly.")
 
     def streamWrite(self, remoteId, data):
         """Write data to a stream
@@ -166,6 +173,8 @@ class AdbProtocolBase(protocol.Protocol):
         self.sendCommand(CMD_WRTE, 0, remoteId, data)
 
     def handle_WRTE(self, remoteId, localId, data):
+        """Stream data received from the remote side.
+        """
         stream = self.streams.get(localId, None)
         if stream:
             stream.protocol.dataReceived(data)

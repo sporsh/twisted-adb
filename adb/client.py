@@ -13,20 +13,13 @@ class AdbClientProtocol(AdbProtocolBase):
                             self.factory.banner)
 
     def sessionConnected(self, systemIdentityString):
-        print "CONNECT SESSION"
-        self.factory.sessions[systemIdentityString] = self
-        self.factory.sessionConnected(self)
+        print "SESSION CONNECTED"
 
 
 class AdbClient(ClientFactory):
-    sessions = None
     protocol = AdbClientProtocol
+
     def __init__(self, systemType='host', serialNumber='', banner=''):
-        self.sessionDeferred = defer.Deferred()
-        self.sessions = {}
         self.systemType=systemType
         self.serialNumber = serialNumber
         self.banner = banner
-
-    def sessionConnected(self, session):
-        self.sessionDeferred.callback(session)
